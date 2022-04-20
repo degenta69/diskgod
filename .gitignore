@@ -3,7 +3,7 @@
 # dependencies
 /node_modules
 vc-front/node_modules
-vc-front/build
+# vc-front/build
 /.pnp
 .pnp.js
 
