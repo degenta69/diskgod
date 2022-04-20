@@ -4,7 +4,7 @@
   "description": "video and text chatting app",
   "main": "index.js",
   "scripts": {
-    "start": "node ./vc-back/index.js",
+    "start": "node vc-back/ index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
