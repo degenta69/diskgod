@@ -4,7 +4,7 @@ node_modules
 /coverage
 vc-front/node_modules
 # production
-/build
+# /build
 
 # misc
 .DS_Store
