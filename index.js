@@ -99,8 +99,8 @@ socket.on("stop typing", (room)=>{socket.in(room).emit("stop typing")})
   }
   )
 
-  socket.on("disconnect", ()=>{
-    console.log(`this user ${userData.id} is disconnected`.padStart(30, " ").green.bold)
-    socket.leave(userData.id)
-  })
+  // socket.on("disconnect", ()=>{
+  //   console.log(`this user ${userData.id} is disconnected`.padStart(30, " ").green.bold)
+  //   socket.leave(userData.id)
+  // })
 });
