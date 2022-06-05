@@ -51,8 +51,8 @@ const authUser = expressAsyncHandler(async (req, res, next) => {
   if (!email || !password) {
     return res.status(400).send("Please fill all the fields");
   }
+  const user = await User.findOne({ email });
   try {
-    const user = await User.findOne({ email });
 
     const isCorrect = await bcrypt.compare(password, user.password);
     // console.log(isCorrect);
@@ -80,6 +80,15 @@ const authUser = expressAsyncHandler(async (req, res, next) => {
     next();
   } catch (ex) {
     // console.log(ex, "ex");
+    if(ex.message.indexOf('password')>-1){
+      return res.status(400).send("Please try to login with the correct credentials");
+    }
+    if(ex.message.indexOf('email')>-1){
+      return res.status(400).send("Please try to login with the correct credentials");
+    }
+    if (!user) {
+      return res.status(404).send("User not found.");
+    }
     return res.status(500).send("Something went wrong");
   }
 });
