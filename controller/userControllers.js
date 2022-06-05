@@ -56,7 +56,9 @@ const authUser = expressAsyncHandler(async (req, res, next) => {
 
     const isCorrect = await bcrypt.compare(password, user.password);
     // console.log(isCorrect);
-
+    if (!user) {
+      return res.status(404).send("User not found.");
+    }
     if (user) {
       if (isCorrect) {
         const sendUser = {
@@ -74,9 +76,6 @@ const authUser = expressAsyncHandler(async (req, res, next) => {
       return res
         .status(400)
         .json("please try to login with the correct credentials");
-    }
-    if (!user) {
-      return res.status(404).send("User not found.");
     }
     next();
   } catch (ex) {
