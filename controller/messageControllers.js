@@ -42,6 +42,31 @@ const sendMessage = expressAsyncHandler(async (req, res) => {
   }
 });
 
+const sendMessageFromSocketToDB = async(messageFromSocket)=>{
+  const messageData = {
+    content: messageFromSocket.content,
+    sender: messageFromSocket.userId,
+    chat: messageFromSocket.chatId,
+  }
+  try {
+    var message = await Message.create(messageData);
+
+    message = await message.populate("sender", "-password");
+    message = await message.populate("chat");
+    message = await User.populate(message, {
+      path: "chat.users",
+      select: "-password",
+    });
+
+    await Chat.findByIdAndUpdate(messageData.chat, { latestMessage: message });
+
+    return message
+  } catch (error) {
+    // console.log(error, "messageData");
+    return error;
+  }
+}
+
 //@description     Get all Messages
 //@route           GET /api/Message/:chatId
 //@access          Protected
@@ -68,4 +93,4 @@ const allMessages = expressAsyncHandler(async (req, res) => {
   }
 });
 
-module.exports = { sendMessage, allMessages };
+module.exports = { sendMessage, allMessages, sendMessageFromSocketToDB };

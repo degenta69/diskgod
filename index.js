@@ -22,6 +22,7 @@ const chatRoutes = require("./routes/chatRoutes");
 const messageRoutes = require("./routes/messageRoutes");
 const { errorHandler, notFound } = require("./middlewares/errorMiddleware");
 const path  = require("path");
+const { sendMessageFromSocketToDB } = require("./controller/messageControllers");
 app.use('/api/user',userRoutes);
 app.use('/api/chats',chatRoutes);
 app.use('/api/message',messageRoutes);
@@ -80,16 +81,16 @@ io.on("connection", (socket) => {
 socket.on("typing", (room)=>{socket.in(room.serverDetail).emit("typing", room.user)})
 socket.on("stop typing", (room)=>{socket.in(room).emit("stop typing")})
 
-  socket.on("new message", (newMessageRecieved)=>{
-    var chat = newMessageRecieved.chat;
-    
-    if(!(chat.users)) return console.log("no users in chat")
-    chat.users.forEach((user) => {
-      if(user._id !== newMessageRecieved.sender._id){
-        // io.to(user._id).emit("new message", newMessageRecieved)
-        socket.in(user._id).emit("message received", newMessageRecieved)
-      }
+  socket.on("new message", async(messageFromSocket)=>{
+    const newMessageRecieved = await sendMessageFromSocketToDB(messageFromSocket)
+    console.log(newMessageRecieved,messageFromSocket)
+    newMessageRecieved.chat.users.forEach((user) => {
+      // if(user._id !== newMessageRecieved.sender._id){
+      //   // io.to(user._id).emit("new message", newMessageRecieved)
+      // }
+      socket.in(user._id).emit("message received", newMessageRecieved)
     });
+    // socket.in(messageFromSocket.userId).emit("message received", newMessageRecieved)
 
   })
 
