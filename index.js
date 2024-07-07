@@ -1,107 +1,102 @@
-const express = require("express");
-const dotenv = require("dotenv");
-dotenv.config();
-const cors = require("cors");
-const { chats } = require("./dummyData");
+const express = require('express')
+const dotenv = require('dotenv')
+dotenv.config()
+const cors = require('cors')
+const { chats } = require('./dummyData')
 
-const connectToMongoDB = require("./config/db");
+const connectToMongoDB = require('./config/db')
 
-connectToMongoDB();
+connectToMongoDB()
 
-app = express();
+app = express()
 
-app.use(express.json()); // for parsing application/json
+app.use(express.json()) // for parsing application/json
 
-app.use(cors());
+app.use(cors())
 
-const server = require("http").createServer(app);
+const server = require('http').createServer(app)
 
-
-const userRoutes = require("./routes/userRoutes");
-const chatRoutes = require("./routes/chatRoutes");
-const messageRoutes = require("./routes/messageRoutes");
-const { errorHandler, notFound } = require("./middlewares/errorMiddleware");
-const path  = require("path");
-const { sendMessageFromSocketToDB } = require("./controller/messageControllers");
-app.use('/api/user',userRoutes);
-app.use('/api/chats',chatRoutes);
-app.use('/api/message',messageRoutes);
+const userRoutes = require('./routes/userRoutes')
+const chatRoutes = require('./routes/chatRoutes')
+const messageRoutes = require('./routes/messageRoutes')
+const { errorHandler, notFound } = require('./middlewares/errorMiddleware')
+const path = require('path')
+const { sendMessageFromSocketToDB } = require('./controller/messageControllers')
+app.use('/api/user', userRoutes)
+app.use('/api/chats', chatRoutes)
+app.use('/api/message', messageRoutes)
 //  deployment code
 
-const __dirname1 = path.resolve();
+const __dirname1 = path.resolve()
 
-if(process.env.NODE_ENV === "production"){
-    app.use(express.static(__dirname1 + "/build"));
-    app.get("*", (req, res) => {
-        res.sendFile(path.resolve(__dirname1, "build","index.html"));
-    });
-}else{
-    app.use(express.static(__dirname1 + "/vc-front/public"));
-    app.get("*", (req, res) => {
-        res.sendFile(path.resolve(__dirname1, "vc-front","public","index.html"));
-    });
-
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(__dirname1 + '/build'))
+  app.get('*', (req, res) => {
+    res.sendFile(path.resolve(__dirname1, 'build', 'index.html'))
+  })
+} else {
+  app.use(express.static(__dirname1 + '/vc-front/public'))
+  app.get('*', (req, res) => {
+    res.sendFile(path.resolve(__dirname1, 'vc-front', 'public', 'index.html'))
+  })
 }
 
 // deployment code
 app.use(notFound)
 app.use(errorHandler)
 
-const PORT = process.env.PORT || 6453;
-
-
+const PORT = process.env.PORT || 6453
 
 server.listen(PORT, () => {
-  console.log(`Server is running on PORT ${PORT}`.yellow.bold);
-});
+  console.log(`Server is running on PORT ${PORT}`.yellow.bold)
+})
 
-const io = require("socket.io")(server, {
+const io = require('socket.io')(server, {
   pingTimeout: 60000,
   cors: {
-    origin: "*",
-    methods: ["GET", "POST"],
-  },
-});
+    origin: '*',
+    methods: ['GET', 'POST']
+  }
+})
 
 io.on("connection", (socket) => {
-  console.log(`New client connected`.america.italic);
+  console.log("New client connected");
 
-  socket.on("setup", (userData)=>{
-    console.log(`this user ${userData.id} is connected`.padStart(30, " ").green.bold)
-    socket.join(userData.id)
-    socket.emit("connected")
-  })
+  socket.on("setup", (userData) => {
+    socket.join(userData.id);
+    socket.emit("connected");
+  });
 
-  socket.on("join room", (room)=>{
-    console.log(`connected to room ${room}`.padStart(30, " ").green.bold)
-    socket.join(room)
-    // socket.emit("joined room")
-  })
+  socket.on("join room", (room) => {
+    socket.join(room);
+  });
 
-socket.on("typing", (room)=>{socket.in(room.serverDetail).emit("typing", room.user)})
-socket.on("stop typing", (room)=>{socket.in(room).emit("stop typing")})
+  socket.on("typing", (room) => {
+    console.log(room,'test')
+    socket.in(room.serverDetail).emit("typing", room.user);
+  });
 
-  socket.on("new message", async(messageFromSocket)=>{
-    const newMessageRecieved = await sendMessageFromSocketToDB(messageFromSocket)
-    console.log(newMessageRecieved,messageFromSocket)
-    newMessageRecieved.chat.users.forEach((user) => {
-      // if(user._id !== newMessageRecieved.sender._id){
-      //   // io.to(user._id).emit("new message", newMessageRecieved)
-      // }
-      socket.in(user._id).emit("message received", newMessageRecieved)
-    });
-    // socket.in(messageFromSocket.userId).emit("message received", newMessageRecieved)
+  socket.on("stop typing", (room) => {
+    socket.in(room).emit("stop typing");
+  });
 
-  })
+  socket.on("new message", async (messageFromSocket) => {
+    try {
+      const newMessageReceived = await sendMessageFromSocketToDB(messageFromSocket);
+      if (newMessageReceived.chat) {
+        newMessageReceived.chat.users.forEach((user) => {
+          // if (user._id.toString() !== newMessageReceived.sender._id.toString()) {
+          // }
+          io.in(user._id.toString()).emit("message received", newMessageReceived);
+        });
+      }
+    } catch (error) {
+      console.error("Error processing new message:", error);
+      socket.emit("message error", { message: "Failed to process the message" });
+    }
+  });
 
-  socket.off("setup", ()=>{
-    console.log(`this user ${userData.id} is disconnected`.padStart(30, " ").green.bold)
-    socket.leave(userData.id)
-  }
-  )
-
-  // socket.on("disconnect", ()=>{
-  //   console.log(`this user ${userData.id} is disconnected`.padStart(30, " ").green.bold)
-  //   socket.leave(userData.id)
-  // })
+  socket.on("disconnect", () => {
+    console.log("Client disconnected");
+  });
 });
