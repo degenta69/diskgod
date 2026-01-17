@@ -30,14 +30,14 @@ app.use('/api/message', messageRoutes)
 const __dirname1 = path.resolve()
 
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(__dirname1 + '/build'))
+  app.use(express.static(__dirname1 + '/../diskgod-front/build'))
   app.get('*', (req, res) => {
-    res.sendFile(path.resolve(__dirname1, 'build', 'index.html'))
+    res.sendFile(path.resolve(__dirname1, '..', 'diskgod-front', 'build', 'index.html'))
   })
 } else {
-  app.use(express.static(__dirname1 + '/vc-front/public'))
+  app.use(express.static(__dirname1 + '/../diskgod-front/public'))
   app.get('*', (req, res) => {
-    res.sendFile(path.resolve(__dirname1, 'vc-front', 'public', 'index.html'))
+    res.sendFile(path.resolve(__dirname1, '..', 'diskgod-front', 'public', 'index.html'))
   })
 }
 
