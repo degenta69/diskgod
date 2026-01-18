@@ -2,7 +2,7 @@ const express = require("express");
 const {
   accessChats,
   fetchChats,
-  createGroupChats,
+  createGroupChat,
   renameGroupChat,
   addGroupChat,
   removeGroupChat,
@@ -12,7 +12,7 @@ const routes = express.Router();
 
 routes.post("/", protect, accessChats);
 routes.get("/", protect, fetchChats);
-routes.post("/group", protect, createGroupChats);
+routes.post("/group", protect, createGroupChat);
 routes.put("/group/rename", protect, renameGroupChat);
 routes.put("/group/add", protect, addGroupChat);
 routes.put("/group/remove", protect, removeGroupChat);

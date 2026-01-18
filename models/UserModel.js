@@ -19,9 +19,14 @@ const userSchema = mongoose.Schema(
     profilepic: {
       type: String,
       default: "https://res.cloudinary.com/degenta69/image/upload/v1649601093/discord-brands_cunlcp.png",
-      
-      // data: Buffer,
-      // contentType: String,
+    },
+    banner: {
+      type: String,
+      default: "", // Empty string means default color in UI
+    },
+    about: {
+      type: String,
+      default: "",
     },
     dob: {
       type: Date,

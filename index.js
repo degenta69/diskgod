@@ -2,6 +2,7 @@ const express = require('express')
 const dotenv = require('dotenv')
 dotenv.config()
 const cors = require('cors')
+require('colors') // Enable color extensions
 const { chats } = require('./dummyData')
 
 const connectToMongoDB = require('./config/db')
@@ -59,44 +60,5 @@ const io = require('socket.io')(server, {
   }
 })
 
-io.on("connection", (socket) => {
-  console.log("New client connected");
-
-  socket.on("setup", (userData) => {
-    socket.join(userData.id);
-    socket.emit("connected");
-  });
-
-  socket.on("join room", (room) => {
-    socket.join(room);
-  });
-
-  socket.on("typing", (room) => {
-    console.log(room,'test')
-    socket.in(room.serverDetail).emit("typing", room.user);
-  });
-
-  socket.on("stop typing", (room) => {
-    socket.in(room).emit("stop typing");
-  });
-
-  socket.on("new message", async (messageFromSocket) => {
-    try {
-      const newMessageReceived = await sendMessageFromSocketToDB(messageFromSocket);
-      if (newMessageReceived.chat) {
-        newMessageReceived.chat.users.forEach((user) => {
-          // if (user._id.toString() !== newMessageReceived.sender._id.toString()) {
-          // }
-          io.in(user._id.toString()).emit("message received", newMessageReceived);
-        });
-      }
-    } catch (error) {
-      console.error("Error processing new message:", error);
-      socket.emit("message error", { message: "Failed to process the message" });
-    }
-  });
-
-  socket.on("disconnect", () => {
-    console.log("Client disconnected");
-  });
-});
+const socketHandler = require('./socket/socketHandler');
+socketHandler(io);

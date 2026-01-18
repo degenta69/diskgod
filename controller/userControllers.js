@@ -1,149 +1,83 @@
 const expressAsyncHandler = require('express-async-handler')
-const jwt = require('jsonwebtoken');
-
-const color = require('colors')
-
-const User = require('../models/UserModel')
-
-const generateAuthToken = require('../config/generateAuthToken')
-const bcrypt = require('bcryptjs')
+const UserService = require('../services/userService');
 
 const registerUser = expressAsyncHandler(async (req, res) => {
-  const { name, email, password, dob } = req.body
-
-  if (!name || !email || !password || !dob) {
-    return res.status(400).send('Please fill all the fields')
-    // throw new Error("Please fill all the fields");
-  }
-
-  const userExist = await User.findOne({ email })
-
-  if (userExist) {
-    return res.status(400).send('User already exist')
-  }
-
-  const user = await User.create({
-    name,
-    email,
-    password,
-    dob
-    // profilepic: req.file?.buffer? req.file.buffer.toString('base64') : null,
-  })
-
-  if (user) {
-    const token = generateAuthToken(user._id)
-    const sendUser = {
-      name: user.name,
-      email: user.email,
-      profilepic: user.profilepic,
-      id: user._id,
-      dob: user.dob
-    }
-    return res.status(201).send({ ...sendUser, token })
-  } else {
-    return res.status(400).send('User not created')
-  }
-  return null
-  // res.status(200).send("User created successfully");
-})
-
-const authUser = expressAsyncHandler(async (req, res, next) => {
-  const { email, password } = req.body
-  if (!email || !password) {
-    return res.status(400).send('Please fill all the fields')
-  }
-  const user = await User.findOne({ email })
+  const { name, email, password, dob } = req.body;
   try {
-    // console.log(isCorrect);
-    if (!user) {
-      return res.status(404).send('User not found.')
-    }
-    const isCorrect = await bcrypt.compare(password, user.password)
-    if (user) {
-      if (isCorrect) {
-        const sendUser = {
-          name: user.name,
-          email: user.email,
-          profilepic: user.profilepic,
-          id: user._id,
-          dob: user.dob
-        }
-        req.user = sendUser
-        return res
-          .status(200)
-          .send({ user: { ...sendUser }, token: generateAuthToken(user._id) })
-      }
-      return res
-        .status(400)
-        .json('please try to login with the correct credentials')
-    }
-    next()
-  } catch (ex) {
-    // console.log(ex, "ex");
-    if (ex.message.indexOf('password') > -1) {
-      return res
-        .status(400)
-        .send('Please try to login with the correct credentials')
-    }
-    if (ex.message.indexOf('email') > -1) {
-      return res
-        .status(400)
-        .send('Please try to login with the correct credentials')
-    }
-    if (!user) {
-      return res.status(404).send('User not found.')
-    }
-    return res.status(500).send('Something went wrong')
+    const user = await UserService.registerUser(name, email, password, dob);
+    res.status(201).send(user);
+  } catch (error) {
+    res.status(400).send(error.message);
   }
-})
+});
+
+const authUser = expressAsyncHandler(async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).send('Please fill all the fields');
+  }
+
+  try {
+    const result = await UserService.authenticateUser(email, password);
+    res.status(200).send(result);
+  } catch (error) {
+    res.status(400).send("Please try to login with the correct credentials");
+  }
+});
 
 const allUsers = expressAsyncHandler(async (req, res) => {
-  const keyword = req.query.search
-    ? {
-        $or: [
-          { name: { $regex: req.query.search, $options: 'i' } },
-          { email: { $regex: req.query.search, $options: 'i' } }
-        ]
-      }
-    : {}
-  const users = await User.find(keyword)
-    .find({ _id: { $ne: req.user._id } })
-    .select('-password')
-
-  // const users = await User.find();
-  res.status(200).send(users)
-})
+  try {
+    const users = await UserService.searchUsers(req.query.search, req.user._id);
+    res.status(200).send(users);
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
 
 const singleUser = expressAsyncHandler(async (req, res) => {
-  const user = await User.findById(req.params.id).select('-password')
-  console.log(user,'user')
-  if (!user) {
-    return res.status(404).send('User not found')
+  try {
+    const user = await UserService.getUserById(req.params.id);
+    res.status(200).send(user);
+  } catch (error) {
+    res.status(404).send(error.message);
   }
-  res.status(200).send(user)
-})
+});
 
 const currentLoggedInUser = expressAsyncHandler(async (req, res) => {
-  const authHeader = req.headers.authorization
-  if (!authHeader) {
-    return res.status(401).send('Access denied')
-  }
-  const token = authHeader.split(' ')[1]
-  if (!token) {
-    return res.status(401).send('Access denied')
-  }
-  try {
-    console.log(token,'ssss')
-    const decoded = jwt.verify(token, process.env.JWT_SECRET)
-    const user = await User.findById(decoded.userId).select('-password')
-    if (!user) {
-      return res.status(401).send('Access denied')
-    }
-    // req.user = user
-    res.status(200).send(user)
-  } catch (err) {
-    return res.status(401).send('Access denied')
-  }
-})
+  // This controller reconstructs user from token/header if needed, but usually middleware does this.
+  // The original logic manually verified token again which is redundant if 'protect' middleware is used,
+  // BUT this endpoint might be called to "get current user" based on token in header without intermediate middleware in some routes?
+  // Let's keep logic but use Service for DB fetch.
+  // Actually, looking at original code: it verifies token and fetches user.
+  // Ideally this should use the 'protect' middleware attached to the route, then just return req.user.
+  // However, keeping behavior consistent for now.
 
-module.exports = { registerUser, authUser, allUsers, singleUser,currentLoggedInUser }
+  // Original code checks headers.authorization manually.
+  const authHeader = req.headers.authorization
+  if (!authHeader) return res.status(401).send('Access denied');
+
+  const token = authHeader.split(' ')[1]
+  if (!token) return res.status(401).send('Access denied');
+
+  // We can't easily move jwt.verify to service without passing the secret, 
+  // or we can import jwt in service. Let's just use the service to get user by ID after decoding.
+  try {
+    const jwt = require('jsonwebtoken'); // Import here or top level
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await UserService.getUserById(decoded.userId);
+    res.status(200).send(user);
+  } catch (err) {
+    return res.status(401).send('Access denied');
+  }
+});
+
+const updateUser = expressAsyncHandler(async (req, res) => {
+  try {
+    const updatedUser = await UserService.updateUserProfile(req.user._id, req.body);
+    res.status(200).send(updatedUser);
+  } catch (error) {
+    res.status(400).send(error.message);
+  }
+});
+
+module.exports = { registerUser, authUser, allUsers, singleUser, currentLoggedInUser, updateUser };
