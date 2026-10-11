@@ -1,9 +1,12 @@
 const Message = require("../models/messageModel");
 const Chat = require("../models/chatModel");
 const User = require("../models/UserModel");
+const ChatService = require("./chatService");
 
 class MessageService {
     async sendMessage(userId, chatId, content) {
+        await ChatService.assertParticipant(chatId, userId);
+
         const messageData = {
             content: content,
             sender: userId,
@@ -28,7 +31,9 @@ class MessageService {
         }
     }
 
-    async getAllMessages(chatId) {
+    async getAllMessages(chatId, userId) {
+        await ChatService.assertParticipant(chatId, userId);
+
         const messages = await Message.find({ chat: chatId })
             .populate("sender", "name profilepic email createdAt")
             .populate("chat")
