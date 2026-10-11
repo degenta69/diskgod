@@ -1,5 +1,25 @@
 const Chat = require("../models/chatModel");
 const User = require("../models/UserModel");
+const Message = require("../models/messageModel");
+const mongoose = require("mongoose");
+
+const PUBLIC_USER = "-password";
+
+function withChatDetails(query, options = {}) {
+    let next = query.populate("users", PUBLIC_USER);
+    if (options.latestMessage) next = next.populate("latestMessage");
+    if (options.groupAdmin) next = next.populate("groupAdmin", PUBLIC_USER);
+    if (options.sort) next = next.sort(options.sort);
+    if (options.lean) next = next.lean();
+    return next;
+}
+
+function withLatestSender(docs) {
+    return User.populate(docs, {
+        path: "latestMessage.sender",
+        select: PUBLIC_USER,
+    });
+}
 
 class ChatService {
     async accessChat(currentUserId, targetUserId) {
@@ -11,25 +31,21 @@ class ChatService {
                 isGroupChat: false,
             };
             const createdChat = await Chat.create(chatData);
-            return await Chat.findById(createdChat._id)
-                .populate("users", "-password")
-                .populate("latestMessage");
+            return withChatDetails(Chat.findById(createdChat._id), { latestMessage: true });
         }
 
-        let chats = await Chat.find({
-            isGroupChat: false,
-            $and: [
-                { users: { $elemMatch: { $eq: currentUserId } } },
-                { users: { $elemMatch: { $eq: targetUserId } } },
-            ],
-        })
-            .populate("users", "-password")
-            .populate("latestMessage");
+        let chats = await withChatDetails(
+            Chat.find({
+                isGroupChat: false,
+                $and: [
+                    { users: { $elemMatch: { $eq: currentUserId } } },
+                    { users: { $elemMatch: { $eq: targetUserId } } },
+                ],
+            }),
+            { latestMessage: true }
+        );
 
-        chats = await User.populate(chats, {
-            path: "latestMessage.sender",
-            select: "-password",
-        });
+        chats = await withLatestSender(chats);
 
         if (chats.length > 0) {
             return chats[0]; // Return the first matching chat (should be only one)
@@ -40,35 +56,25 @@ class ChatService {
                 isGroupChat: false,
             };
             const createdChat = await Chat.create(chatData);
-            return await Chat.findById(createdChat._id)
-                .populate("users", "-password")
-                .populate("latestMessage");
+            return withChatDetails(Chat.findById(createdChat._id), { latestMessage: true });
         }
     }
 
     async fetchChats(userId) {
-        let chats = await Chat.find({
-            users: { $elemMatch: { $eq: userId } },
-        })
-            .populate("users", "-password")
-            .populate("latestMessage")
-            .populate("groupAdmin", "-password")
-            .sort({ createdAt: -1 })
-            .lean();
+        let chats = await withChatDetails(
+            Chat.find({
+                users: { $elemMatch: { $eq: userId } },
+            }),
+            {
+                latestMessage: true,
+                groupAdmin: true,
+                sort: { createdAt: -1 },
+                lean: true,
+            }
+        );
 
-        chats = await User.populate(chats, {
-            path: "latestMessage.sender",
-            select: "-password",
-        });
+        chats = await withLatestSender(chats);
 
-        // CALCULATE UNREAS MESSAGES
-        // Efficient way: Aggregation is better, but since we have the list, we can do a parallel count query
-        // or iterate. For scalability, we should use aggregation in the future.
-        // For now, let's execute a count query for each chat (N+1 but N is small: user's chat list).
-        // Or better: Fetch all unread messages for this user grouped by chat.
-
-        const Message = require("../models/messageModel");
-        const mongoose = require("mongoose");
         const userObjectId = new mongoose.Types.ObjectId(userId);
 
         const unreadCounts = await Message.aggregate([
@@ -111,22 +117,14 @@ class ChatService {
             description: description || "Welcome to the group!",
         });
 
-        return await Chat.findById(groupChat._id)
-            .populate("users", "-password")
-            .populate("groupAdmin", "-password");
+        return withChatDetails(Chat.findById(groupChat._id), { groupAdmin: true });
     }
 
     async renameGroupChat(chatId, updateData) {
-        const updatedChat = await Chat.findByIdAndUpdate(
-            chatId,
-            updateData,
-            { new: true }
-        )
-            .populate("users", "-password")
-            .populate("groupAdmin", "-password")
-            .populate("latestMessage");
-
-        return updatedChat;
+        return withChatDetails(
+            Chat.findByIdAndUpdate(chatId, updateData, { new: true }),
+            { groupAdmin: true, latestMessage: true }
+        );
     }
 
     async addToGroup(chatId, userId) {
@@ -135,16 +133,10 @@ class ChatService {
         if (findChat.users.length >= 10) throw new Error("Group Chat cannot have more than 10 users"); // Configurable limit
         if (findChat.users.includes(userId)) throw new Error("User already added to the group");
 
-        const updatedChat = await Chat.findByIdAndUpdate(
-            chatId,
-            { $push: { users: userId } },
-            { new: true }
-        )
-            .populate("users", "-password")
-            .populate("groupAdmin", "-password")
-            .populate("latestMessage");
-
-        return updatedChat;
+        return withChatDetails(
+            Chat.findByIdAndUpdate(chatId, { $push: { users: userId } }, { new: true }),
+            { groupAdmin: true, latestMessage: true }
+        );
     }
 
     async removeFromGroup(chatId, userId, requesterId) {
@@ -164,16 +156,10 @@ class ChatService {
             throw new Error("Cannot remove the admin");
         }
 
-        const updatedChat = await Chat.findByIdAndUpdate(
-            chatId,
-            { $pull: { users: userId } },
-            { new: true }
-        )
-            .populate("users", "-password")
-            .populate("groupAdmin", "-password")
-            .populate("latestMessage");
-
-        return updatedChat;
+        return withChatDetails(
+            Chat.findByIdAndUpdate(chatId, { $pull: { users: userId } }, { new: true }),
+            { groupAdmin: true, latestMessage: true }
+        );
     }
 }
 

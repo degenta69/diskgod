@@ -3,13 +3,12 @@ const dotenv = require('dotenv')
 dotenv.config()
 const cors = require('cors')
 require('colors') // Enable color extensions
-const { chats } = require('./dummyData')
 
 const connectToMongoDB = require('./config/db')
 
 connectToMongoDB()
 
-app = express()
+const app = express()
 
 app.use(express.json()) // for parsing application/json
 
