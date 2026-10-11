@@ -30,6 +30,18 @@ const allMessages = expressAsyncHandler(async (req, res) => {
   }
 });
 
+const messagePage = expressAsyncHandler(async (req, res) => {
+  try {
+    const page = await MessageService.getMessagePage(req.params.chatId, req.user.id, {
+      limit: req.query.limit,
+      before: req.query.before,
+    });
+    res.json(page);
+  } catch (error) {
+    res.status(error.statusCode || 500).send(error.message);
+  }
+});
+
 // Used by Socket Handler - We can export the Service method directly or wrap it.
 // The SocketHandler imports 'sendMessageFromSocketToDB'.
 // We should update SocketHandler to import MessageService instead.
@@ -77,4 +89,10 @@ const clearChatMessages = expressAsyncHandler(async (req, res) => {
   }
 });
 
-module.exports = { sendMessage, allMessages, sendMessageFromSocketToDB, clearChatMessages };
+module.exports = {
+  sendMessage,
+  allMessages,
+  messagePage,
+  sendMessageFromSocketToDB,
+  clearChatMessages,
+};

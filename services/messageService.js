@@ -1,6 +1,18 @@
 const Message = require("../models/messageModel");
 const Chat = require("../models/chatModel");
 const User = require("../models/UserModel");
+const {
+    DEFAULT_PAGE_SIZE,
+    isBlank,
+    parsePageLimit,
+    parseObjectId,
+    parseCursorId,
+    buildOlderThanFilter,
+    shapeMessagePage,
+} = require("./messagePagination");
+
+const SENDER_FIELDS = "name profilepic banner email createdAt";
+const CHAT_USER_FIELDS = "name profilepic banner email createdAt";
 
 class MessageService {
     async sendMessage(userId, chatId, content) {
@@ -52,6 +64,54 @@ class MessageService {
         });
 
         return populatedMessages;
+    }
+
+    async getMessagePage(chatId, userId, options = {}) {
+        parseObjectId(chatId, "chatId");
+        if (!userId) {
+            const error = new Error("Access denied");
+            error.statusCode = 401;
+            throw error;
+        }
+
+        const limit = isBlank(options.limit) ? DEFAULT_PAGE_SIZE : parsePageLimit(options.limit);
+        const cursorId = parseCursorId(options.before);
+
+        const chat = await Chat.findById(chatId).select("users");
+        if (!chat) {
+            const error = new Error("Chat not found");
+            error.statusCode = 404;
+            throw error;
+        }
+        const isMember = chat.users.some((id) => String(id) === String(userId));
+        if (!isMember) {
+            const error = new Error("You are not a participant in this chat");
+            error.statusCode = 403;
+            throw error;
+        }
+
+        let cursor = null;
+        if (cursorId) {
+            cursor = await Message.findById(cursorId).select("createdAt chat");
+            if (!cursor || String(cursor.chat) !== String(chatId)) {
+                const error = new Error("before does not match a message in this chat");
+                error.statusCode = 400;
+                throw error;
+            }
+        }
+
+        let messages = await Message.find(buildOlderThanFilter(chatId, cursor))
+            .sort({ createdAt: -1, _id: -1 })
+            .limit(limit + 1)
+            .populate("sender", SENDER_FIELDS)
+            .populate("chat");
+
+        messages = await User.populate(messages, {
+            path: "chat.users",
+            select: CHAT_USER_FIELDS,
+        });
+
+        return shapeMessagePage(messages, limit);
     }
 
     async markChatAsRead(chatId, userId) {
