@@ -2,56 +2,37 @@ const Message = require("../models/messageModel");
 const Chat = require("../models/chatModel");
 const User = require("../models/UserModel");
 
+const SENDER_FIELDS = "name profilepic banner email createdAt";
+const CHAT_USER_FIELDS = "name profilepic banner email createdAt";
+
+async function hydrateMessages(target) {
+    const populated = await Message.populate(target, [
+        { path: "sender", select: SENDER_FIELDS },
+        { path: "chat" },
+    ]);
+    return User.populate(populated, {
+        path: "chat.users",
+        select: CHAT_USER_FIELDS,
+    });
+}
+
 class MessageService {
     async sendMessage(userId, chatId, content) {
-        const messageData = {
+        const message = await Message.create({
             content: content,
             sender: userId,
             chat: chatId,
-            readBy: [userId] // Sender has read their own message
-        };
+            readBy: [userId],
+        });
 
-        try {
-            let message = await Message.create(messageData);
-
-            message = await message.populate("sender", "name profilepic banner email createdAt");
-            message = await message.populate("chat");
-            message = await User.populate(message, {
-                path: "chat.users",
-                select: "name profilepic banner email createdAt",
-            });
-
-            await Chat.findByIdAndUpdate(chatId, { latestMessage: message });
-            return message;
-        } catch (error) {
-            throw error;
-        }
+        const hydrated = await hydrateMessages(message);
+        await Chat.findByIdAndUpdate(chatId, { latestMessage: hydrated });
+        return hydrated;
     }
 
     async getAllMessages(chatId) {
-        const messages = await Message.find({ chat: chatId })
-            .populate("sender", "name profilepic email createdAt")
-            .populate("chat")
-            .lean(); // Optimization
-
-        // We still need to populate detailed nested fields if frontend expects them
-        // But .lean() returns POJO, so we can't use .populate() on it directly unless we use chain.
-        // Mongoose 6+ supports deep populate better, but let's stick to reliable manual populate if needed or standard chain.
-        // Wait, User.populate() works on POJOs too in recent Mongoose versions.
-
-        // Reverting lean() for safety on complex nested population chains unless we test thoroughly.
-        // sticking to standard query for complex population just to be safe.
-
-        let populatedMessages = await Message.find({ chat: chatId })
-            .populate("sender", "name profilepic banner email createdAt")
-            .populate("chat");
-
-        populatedMessages = await User.populate(populatedMessages, {
-            path: "chat.users",
-            select: "name profilepic banner email createdAt",
-        });
-
-        return populatedMessages;
+        const messages = await Message.find({ chat: chatId });
+        return hydrateMessages(messages);
     }
 
     async markChatAsRead(chatId, userId) {
