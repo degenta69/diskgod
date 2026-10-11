@@ -1,7 +1,34 @@
 const Chat = require("../models/chatModel");
 const User = require("../models/UserModel");
+const { isChatMember, isGroupAdmin, sameId } = require("../utils/access");
+
+function fail(statusCode, message) {
+    const error = new Error(message);
+    error.statusCode = statusCode;
+    return error;
+}
+
+async function findChatById(chatId) {
+    try {
+        return await Chat.findById(chatId);
+    } catch (error) {
+        if (error.name === "CastError") throw fail(400, "Invalid chat id");
+        throw error;
+    }
+}
 
 class ChatService {
+    async assertParticipant(chatId, userId) {
+        if (!chatId || !userId) throw fail(400, "Chat and user are required");
+
+        const chat = await findChatById(chatId);
+        if (!chat) throw fail(404, "Chat not found");
+        if (!isChatMember(chat.users, userId)) {
+            throw fail(403, "You are not a participant in this chat");
+        }
+        return chat;
+    }
+
     async accessChat(currentUserId, targetUserId) {
         if (currentUserId === targetUserId) {
             // Personal self-chat logic
@@ -116,7 +143,14 @@ class ChatService {
             .populate("groupAdmin", "-password");
     }
 
-    async renameGroupChat(chatId, updateData) {
+    async renameGroupChat(chatId, updateData, requesterId) {
+        const chat = await findChatById(chatId);
+        if (!chat) throw fail(404, "Chat not found");
+        if (!chat.isGroupChat) throw fail(400, "Not a group chat");
+        if (!isGroupAdmin(chat, requesterId)) {
+            throw fail(403, "Only the group admin can update this chat");
+        }
+
         const updatedChat = await Chat.findByIdAndUpdate(
             chatId,
             updateData,
@@ -129,11 +163,24 @@ class ChatService {
         return updatedChat;
     }
 
-    async addToGroup(chatId, userId) {
-        const findChat = await Chat.findById(chatId);
-        if (!findChat) throw new Error("Chat not found");
-        if (findChat.users.length >= 10) throw new Error("Group Chat cannot have more than 10 users"); // Configurable limit
-        if (findChat.users.includes(userId)) throw new Error("User already added to the group");
+    async addToGroup(chatId, userId, requesterId) {
+        const findChat = await findChatById(chatId);
+        if (!findChat) throw fail(404, "Chat not found");
+        if (!findChat.isGroupChat) throw fail(400, "Not a group chat");
+        if (!isGroupAdmin(findChat, requesterId)) {
+            throw fail(403, "Only the group admin can add members");
+        }
+        if (findChat.users.length >= 10) throw fail(400, "Group Chat cannot have more than 10 users");
+        if (isChatMember(findChat.users, userId)) throw fail(400, "User already added to the group");
+
+        try {
+            const userExists = await User.exists({ _id: userId });
+            if (!userExists) throw fail(404, "User not found");
+        } catch (error) {
+            if (error.statusCode) throw error;
+            if (error.name === "CastError") throw fail(400, "Invalid user id");
+            throw error;
+        }
 
         const updatedChat = await Chat.findByIdAndUpdate(
             chatId,
@@ -148,20 +195,18 @@ class ChatService {
     }
 
     async removeFromGroup(chatId, userId, requesterId) {
-        const findChat = await Chat.findById(chatId);
-        if (!findChat) throw new Error("Chat not found");
+        const findChat = await findChatById(chatId);
+        if (!findChat) throw fail(404, "Chat not found");
 
-        // Logic extraction from controller
-        const isAdminRemove = findChat.groupAdmin.toString() === requesterId;
-        const isSelfLeave = requesterId === userId;
+        const isAdminRemove = isGroupAdmin(findChat, requesterId);
+        const isSelfLeave = sameId(requesterId, userId);
 
         if (!isSelfLeave && !isAdminRemove) {
-            throw new Error("Not authorized to remove user");
+            throw fail(403, "Not authorized to remove user");
         }
 
-        // If admin is leaving (and rules say admin can't be removed/leave without transfer - simplified here as per existing logic)
-        if (findChat.groupAdmin.toString() === userId && !isSelfLeave) {
-            throw new Error("Cannot remove the admin");
+        if (isGroupAdmin(findChat, userId) && !isSelfLeave) {
+            throw fail(400, "Cannot remove the admin");
         }
 
         const updatedChat = await Chat.findByIdAndUpdate(

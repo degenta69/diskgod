@@ -1,6 +1,5 @@
 const expressAsyncHandler = require("express-async-handler");
 const MessageService = require("../services/messageService");
-const jwt = require("jsonwebtoken");
 
 const sendMessage = expressAsyncHandler(async (req, res) => {
   const { chatId, content } = req.body;
@@ -9,24 +8,20 @@ const sendMessage = expressAsyncHandler(async (req, res) => {
   }
 
   try {
-    const token = req.headers.authorization.split(" ")[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const userId = decoded.userId;
-
-    const message = await MessageService.sendMessage(userId, chatId, content);
+    const message = await MessageService.sendMessage(req.user.id, chatId, content);
     res.json(message);
   } catch (error) {
-    res.status(500).send(error.message);
+    res.status(error.statusCode || 500).send(error.message);
   }
 });
 
 const allMessages = expressAsyncHandler(async (req, res) => {
   const { chatId } = req.params;
   try {
-    const messages = await MessageService.getAllMessages(chatId);
+    const messages = await MessageService.getAllMessages(chatId, req.user.id);
     res.json(messages);
   } catch (error) {
-    res.status(500).send(error.message);
+    res.status(error.statusCode || 500).send(error.message);
   }
 });
 
@@ -34,17 +29,11 @@ const allMessages = expressAsyncHandler(async (req, res) => {
 // The SocketHandler imports 'sendMessageFromSocketToDB'.
 // We should update SocketHandler to import MessageService instead.
 const sendMessageFromSocketToDB = async (messageFromSocket) => {
-  try {
-    // Adapt socket message object to service args
-    // messageFromSocket: { userId, chatId, content }
-    return await MessageService.sendMessage(
-      messageFromSocket.userId,
-      messageFromSocket.chatId,
-      messageFromSocket.content
-    );
-  } catch (error) {
-    return error;
-  }
+  return MessageService.sendMessage(
+    messageFromSocket.userId,
+    messageFromSocket.chatId,
+    messageFromSocket.content
+  );
 }
 
 const clearChatMessages = expressAsyncHandler(async (req, res) => {

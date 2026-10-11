@@ -80,11 +80,10 @@ const renameGroupChat = expressAsyncHandler(async (req, res) => {
   if (description) updateData.description = description;
 
   try {
-    const updatedChat = await ChatService.renameGroupChat(chatId, updateData);
-    if (!updatedChat) return res.status(400).send("Chat not found");
+    const updatedChat = await ChatService.renameGroupChat(chatId, updateData, req.user.id);
     res.status(200).send(updatedChat);
   } catch (error) {
-    res.status(500).send(error.message);
+    res.status(error.statusCode || 500).send(error.message);
   }
 });
 
@@ -93,11 +92,10 @@ const addGroupChat = expressAsyncHandler(async (req, res) => {
   if (!chatId || !userId) return res.status(400).send("ChatId and UserId are required");
 
   try {
-    const added = await ChatService.addToGroup(chatId, userId);
+    const added = await ChatService.addToGroup(chatId, userId, req.user.id);
     res.status(200).send(added);
   } catch (error) {
-    // Sending 200 with error property to match legacy frontend expectation (frontend checks for .error)
-    res.status(200).send({ error: error.message });
+    res.status(error.statusCode || 500).send(error.message);
   }
 });
 
@@ -109,7 +107,7 @@ const removeGroupChat = expressAsyncHandler(async (req, res) => {
     const result = await ChatService.removeFromGroup(chatId, userId, req.user.id);
     res.status(200).send(result);
   } catch (error) {
-    res.status(200).send({ error: error.message });
+    res.status(error.statusCode || 500).send(error.message);
   }
 });
 

@@ -1,6 +1,7 @@
 const User = require('../models/UserModel');
 const bcrypt = require('bcryptjs');
 const generateAuthToken = require('../config/generateAuthToken');
+const { escapeRegex } = require('../utils/access');
 
 class UserService {
     async registerUser(name, email, password, dob) {
@@ -54,20 +55,21 @@ class UserService {
     }
 
     async searchUsers(keyword, currentUserId) {
-        // Optimized search query
-        const query = keyword
+        const term = typeof keyword === 'string' ? keyword.trim().slice(0, 64) : '';
+        const safeKeyword = escapeRegex(term);
+        const query = term
             ? {
                 $and: [
                     {
                         $or: [
-                            { name: { $regex: keyword, $options: 'i' } },
-                            { email: { $regex: keyword, $options: 'i' } }
+                            { name: { $regex: safeKeyword, $options: 'i' } },
+                            { email: { $regex: safeKeyword, $options: 'i' } }
                         ]
                     },
                     { _id: { $ne: currentUserId } }
                 ]
             }
-            : { _id: { $ne: currentUserId } }; // If no search, just exclude self
+            : { _id: { $ne: currentUserId } };
 
         const users = await User.find(query).select('-password').lean();
         return users;

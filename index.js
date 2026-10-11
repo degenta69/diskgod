@@ -1,6 +1,8 @@
 const express = require('express')
 const dotenv = require('dotenv')
 dotenv.config()
+const { assertEnv } = require('./config/env')
+assertEnv()
 const cors = require('cors')
 require('colors') // Enable color extensions
 const { chats } = require('./dummyData')
@@ -9,7 +11,7 @@ const connectToMongoDB = require('./config/db')
 
 connectToMongoDB()
 
-app = express()
+const app = express()
 
 app.use(express.json()) // for parsing application/json
 
